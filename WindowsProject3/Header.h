@@ -24,6 +24,7 @@ private:
 
     using command_funcs_t = std::variant<std::function<void(LPARAM)>, std::function<void()>>;
 
+    using keydown_funcs_t = command_funcs_t;
 
 
     std::unordered_map < int, message_funcs_t> message_actions{
@@ -31,6 +32,8 @@ private:
     };
 
     std::unordered_map < int, command_funcs_t> command_actions;
+
+    std::unordered_map<int, keydown_funcs_t> keydown_actions; // < ------- 
 
 
 
@@ -85,7 +88,7 @@ public:
     void on_create(Func action) {
         message_actions[WM_CREATE] = std::function(action);
     }
-
+    
 
     template <typename Func, typename... Rest>
     void on_command(int command, Func action, Rest... rest) {
@@ -97,7 +100,6 @@ public:
     template <typename Func>
     void on_command(int command, Func action) {
         command_actions[command] = std::function(action);
-
     }
 
 
