@@ -1,7 +1,7 @@
 #include "framework.h"
 #include"properties.h"
 
-
+#include <type_traits>
 
 #include <string>
 #include <variant>
@@ -10,6 +10,10 @@
 
 template<class... Ts> struct visiter : Ts... { using Ts::operator()...; };
 template<class... Ts> visiter(Ts...)->visiter<Ts...>;
+
+
+template<typename T>
+concept int_range = requires { std::is_same<int, T>::value or std::is_same<std::pair<int, int>, T>::value; };
 
 
 
@@ -39,7 +43,7 @@ private:
 
 
 
-    void message_caller(message_funcs_t to_call, WPARAM wparam, LPARAM lparam) {
+    void message_caller(const message_funcs_t& to_call, WPARAM wparam, LPARAM lparam) {
         std::visit(visiter{
            [&](std::function<void(WPARAM, LPARAM)> action) {action(lparam, wparam); },
            [&](std::function<void(WPARAM) > action) {action(wparam); },
@@ -49,7 +53,7 @@ private:
 
     }
 
-    void commad_caller(command_funcs_t to_call, LPARAM lparam) {
+    void commad_caller(const command_funcs_t& to_call, LPARAM lparam) {
         std::visit(visiter{
             [&](std::function<void(LPARAM) > action) {action(lparam); },
             [&](std::function<void() > action) {action(); }
@@ -70,41 +74,59 @@ public:
         }
     };
 
+    template <int_range Range, typename Func, typename... Rest>
+    void on_regular_message(Range&& message, Func&& action, Rest&&... rest) {
+        on_regular_message(std::forward<Range>(message), std::forward<Func>(action));
+        on_regular_message(std::forward<Rest>(rest)...);
+    }
+
     template <typename Func>
-    void on_regular_message(int message, Func action) {
-        message_actions[message] = std::function(action);
+    void on_regular_message(int message, Func&& action) {
+        message_actions[message] = std::function(std::forward<Func>(action));
+    }
+
+    template <typename Func>
+    void on_regular_message(std::pair<int, int>& range, Func&& action) {
+        for (int message = range.first; message <= range.second; message++) {
+            message_actions[message] = std::function(std::forward<Func>(action));
+        }
+
     }
 
 
-    template <typename Func, typename... Rest>
-    void on_regular_message(int message, Func action, Rest... rest) {
-        on_regular_message(message, action);
-        on_regular_message(rest...);
-    }
+  
 
 
 
     template <typename Func>
-    void on_create(Func action) {
-        message_actions[WM_CREATE] = std::function(action);
+    void on_create(Func&& action) {
+        message_actions[WM_CREATE] = std::function(std::forward<Func>(action));
     }
     
 
-    template <typename Func, typename... Rest>
-    void on_command(int command, Func action, Rest... rest) {
-        on_command(command, action);
-        on_command(rest...);
+
+    template <int_range Range, typename Func, typename... Rest>  
+    void on_command(Range&& command, Func&& action, Rest&&... rest) {
+        on_command(std::forward<Range>(command), std::forward<Func>(action));
+        on_command(std::forward<Rest>(rest)...);
 
     }
 
     template <typename Func>
-    void on_command(int command, Func action) {
-        command_actions[command] = std::function(action);
+    void on_command(int command, Func&& action) {
+        command_actions[command] = std::function(std::forward<Func>(action));
+    }
+
+    template <typename Func>
+    void on_command(std::pair<int, int>& range, Func&& action) { //[first; last]
+        for (int command = range.first; command <= range.second; command++) {
+            command_actions[command] = std::function(std::forward<Func>(action));
+        }
     }
 
 
 
-
+   
 
 
 
@@ -216,10 +238,6 @@ public:
             width, height, parent, menu, instance, this);
 
         show();
-
-
-
-
     }
 
     operator HWND() const { return handle; };

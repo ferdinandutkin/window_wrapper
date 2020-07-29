@@ -27,16 +27,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
  
     static window wnd;
 
-
+   
 
     wnd.on_regular_message(
-        WM_MOUSEMOVE, [] {
+        std::make_pair(WM_MOUSEMOVE, WM_SIZE), [] {
             wnd.window_name = L"Moving";
-        },
-        WM_SIZE, [] {
-            wnd.window_name = L"Sizing";
         }
-
         );
 
 
