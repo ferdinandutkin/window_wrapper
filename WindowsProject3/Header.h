@@ -8,12 +8,59 @@
 #include <functional>
 #include <unordered_map>
 
-template<class... Ts> struct visiter : Ts... { using Ts::operator()...; };
-template<class... Ts> visiter(Ts...)->visiter<Ts...>;
 
+inline int get_x(LPARAM l) {
+    return  ((int)(short)LOWORD(l));
+}
+
+
+inline int get_y(LPARAM l) {
+    return  ((int)(short)HIWORD(l));
+}
+
+
+
+
+template<typename... Ts> struct visiter : Ts... { using Ts::operator()...; };
+template<typename... Ts> visiter(Ts...)->visiter<Ts...>;
+
+
+template <typename T>
+concept integral_pair = std::is_integral_v<typename T::first_type> and std::is_integral_v<typename T::second_type> and std::is_same_v<std::pair<typename T::first_type, typename T::second_type>, T>;;
 
 template<typename T>
-concept int_range = requires { std::is_same<int, T>::value or std::is_same<std::pair<int, int>, T>::value; };
+concept integral_range = integral_pair<T> or std::is_integral_v<T>;
+
+template<typename T>
+using common_pair_type = std::common_type_t<typename T::first_type, typename T::second_type > ;
+
+
+class dc {
+private:
+    HDC device_context{};
+    HWND window{};
+public:
+    dc()  {};
+    dc(HWND window) : window(window) {
+        device_context = GetDC(window);
+    }
+    ~dc() {
+        ReleaseDC(window, device_context);
+    }
+
+
+    bool rectangle(int left, int top, int right, int bottom) {
+        return Rectangle(device_context, left, top, right, right);
+    }
+    
+    COLORREF set_pixel(int x, int y, COLORREF color = 0ul) {
+        return SetPixel(device_context, x, y, color);
+    }
+
+    operator HDC() const noexcept { return device_context; }
+
+};
+ 
 
 
 
@@ -31,13 +78,13 @@ private:
     using keydown_funcs_t = command_funcs_t;
 
 
-    std::unordered_map < int, message_funcs_t> message_actions{
+    std::unordered_map <long long int, message_funcs_t> message_actions{
             {WM_DESTROY, [] {::PostQuitMessage(0); }}
     };
 
-    std::unordered_map < int, command_funcs_t> command_actions;
+    std::unordered_map <long long int, command_funcs_t> command_actions;
 
-    std::unordered_map<int, keydown_funcs_t> keydown_actions; // < ------- 
+    std::unordered_map<long long int, keydown_funcs_t> keydown_actions; // < ------- 
 
 
 
@@ -65,6 +112,18 @@ private:
 
 
 public:
+
+
+    void set_background_color(int r, int g, int b) {
+        PAINTSTRUCT ps{};
+        HDC hdc = BeginPaint(handle, &ps);
+        SetBkColor(hdc, RGB(r, g, b));
+
+        EndPaint(handle, &ps);
+
+
+
+    }
     HWND handle{};  //смерть абстракции
 
     prop<std::wstring> window_name{ win_name,
@@ -74,27 +133,56 @@ public:
         }
     };
 
-    template <int_range Range, typename Func, typename... Rest>
+
+    prop<RECT> client_rect{
+        [this] {
+            RECT rect;
+            GetClientRect(handle, &rect);
+            return rect;
+        },
+        [this](RECT rect) {
+            AdjustWindowRectEx(&rect, GetWindowLongW(handle, GWL_STYLE), reinterpret_cast<BOOL>(GetMenu(handle)), GetWindowLongW(handle, GWL_EXSTYLE));
+            RECT window_rect;
+            GetWindowRect(handle, &window_rect);
+            MoveWindow(handle, window_rect.left, window_rect.top, rect.right - rect.left, rect.bottom - rect.top, true);
+
+        }
+    };
+
+
+
+
+
+    
+
+
+    template <integral_pair Range, typename Func, typename... Rest>
     void on_regular_message(Range&& message, Func&& action, Rest&&... rest) {
         on_regular_message(std::forward<Range>(message), std::forward<Func>(action));
         on_regular_message(std::forward<Rest>(rest)...);
     }
 
-    template <typename Func>
-    void on_regular_message(int message, Func&& action) {
-        message_actions[message] = std::function(std::forward<Func>(action));
+    template <typename Func, typename... Rest>
+    void on_regular_message(long long int message, Func&& action, Rest&&... rest) {
+        on_regular_message(std::forward<long long int>(message), std::forward<Func>(action));
+        on_regular_message(std::forward<Rest>(rest)...);
     }
 
     template <typename Func>
-    void on_regular_message(std::pair<int, int>& range, Func&& action) {
-        for (int message = range.first; message <= range.second; message++) {
+    void on_regular_message(long long int message, Func&& action) {
+        message_actions[message] = std::function(std::forward<Func>(action));
+    }
+
+    template <integral_pair Range, typename Func>
+    void on_regular_message(Range range, Func&& action) {
+        for (long long int message = range.first; message <= range.second; message++) {
             message_actions[message] = std::function(std::forward<Func>(action));
         }
 
     }
 
-
   
+
 
 
 
@@ -102,24 +190,67 @@ public:
     void on_create(Func&& action) {
         message_actions[WM_CREATE] = std::function(std::forward<Func>(action));
     }
-    
 
 
-    template <int_range Range, typename Func, typename... Rest>  
+    template <typename Func>
+    void on_paint(Func&& action) {
+        message_actions[WM_PAINT] = std::function(std::forward<Func>(action));
+    }
+
+
+    template <typename Func>
+    void on_mouse_move(Func&& action) {
+        message_actions[WM_MOUSEMOVE] = std::function(std::forward<Func>(action));
+
+    }
+
+    template <typename CoordsFunc> requires std::is_convertible_v < CoordsFunc, std::function<void(int, int)>>
+    void on_mouse_move(CoordsFunc&& action) {
+        
+        message_actions[WM_MOUSEMOVE] = std::function([&](LPARAM l) {
+            action(get_x(l), get_y(l));
+            });
+
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    template <integral_pair Range, typename Func, typename... Rest>  
     void on_command(Range&& command, Func&& action, Rest&&... rest) {
         on_command(std::forward<Range>(command), std::forward<Func>(action));
         on_command(std::forward<Rest>(rest)...);
 
     }
 
+    template <typename Func, typename... Rest>
+    void on_command(long long int command, Func&& action, Rest&&... rest) {
+        on_command(std::forward<long long int>(command), std::forward<Func>(action));
+        on_command(std::forward<Rest>(rest)...);
+
+    }
+
+
     template <typename Func>
-    void on_command(int command, Func&& action) {
+    void on_command(long long int command, Func&& action) {
         command_actions[command] = std::function(std::forward<Func>(action));
     }
 
-    template <typename Func>
-    void on_command(std::pair<int, int>& range, Func&& action) { //[first; last]
-        for (int command = range.first; command <= range.second; command++) {
+    template <integral_pair Range, typename Func>
+    void on_command(Range&& range, Func&& action) { //[first; last]
+        for (long long int command = range.first; command <= range.second; command++) {
             command_actions[command] = std::function(std::forward<Func>(action));
         }
     }

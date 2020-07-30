@@ -1,6 +1,7 @@
 ﻿// WindowsProject3.cpp : Определяет точку входа для приложения.
 //
 
+
 #include "framework.h"
 #include "Header.h"
 #include "WindowsProject3.h"
@@ -23,42 +24,30 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     _In_ int       nCmdShow)
 {
   
+    window wnd;
+
+    int x{}, y{};
 
  
-    static window wnd;
-
-   
-
-    wnd.on_regular_message(
-        std::make_pair(WM_MOUSEMOVE, WM_SIZE), [] {
-            wnd.window_name = L"Moving";
-        }
-        );
+    wnd.on_paint([&] {
+          dc context{ wnd };
+          context.set_pixel(x, y, RGB(255, 0, 0));
+        });
 
 
+    wnd.on_mouse_move([&](int x_cord, int y_cord) {
+        x = x_cord;
+        y = y_cord;
+        wnd.window_name = std::to_wstring(x) + L"    " + std::to_wstring(y);
+        });
 
- 
-   
+    wnd.create(L"Test" ,WS_OVERLAPPEDWINDOW);
 
-  
 
-    wnd.create(L"eeee", WS_OVERLAPPEDWINDOW);
-   
+
 
     return window::pump_messages();
-    /*
-    // Цикл основного сообщения:
-    while (GetMessage(&msg, nullptr, 0, 0))
-    {
-        if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-    }
-
-    return (int) msg.wParam;
-    */
+   
 }
 
  
