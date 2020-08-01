@@ -1,4 +1,5 @@
 #include "framework.h"
+//#define __cpp_lib_concepts 201907L
 #include"properties.h"
 
 #include <type_traits>
@@ -7,6 +8,7 @@
 #include <variant>
 #include <functional>
 #include <unordered_map>
+#include <concepts>
 
 
 inline int get_x(LPARAM l) {
@@ -21,8 +23,8 @@ inline int get_y(LPARAM l) {
 
 
 
-template<typename... Ts> struct visiter : Ts... { using Ts::operator()...; };
-template<typename... Ts> visiter(Ts...)->visiter<Ts...>;
+template<typename... Ts> struct visitor : Ts... { using Ts::operator()...; };
+template<typename... Ts> visitor(Ts...)->visitor<Ts...>;
 
 
 template <typename T>
@@ -42,20 +44,40 @@ private:
 public:
     dc()  {};
     dc(HWND window) : window(window) {
+   
         device_context = GetDC(window);
     }
     ~dc() {
         ReleaseDC(window, device_context);
     }
 
+    //верхний левый
+    //правый нижний
+    bool rectangle(int x1, int y1, int x2, int y2) {
+        return Rectangle(device_context, x1, y1, x2, y2);
+    }
 
-    bool rectangle(int left, int top, int right, int bottom) {
-        return Rectangle(device_context, left, top, right, right);
+    bool line(int x1, int y1, int x2, int y2) {
+        MoveToEx(device_context, x1, y1, nullptr); //сделать текущими координаты x1, y1
+        return LineTo(device_context, x2, y2);
     }
     
     COLORREF set_pixel(int x, int y, COLORREF color = 0ul) {
         return SetPixel(device_context, x, y, color);
     }
+
+    COLORREF set_pen_color(COLORREF color) {
+        HPEN pen{ CreatePen(PS_SOLID, 1, color) };
+        SelectObject( device_context, pen);
+        return SetDCPenColor(device_context, color);
+    }
+
+
+    COLORREF set_brush_color(COLORREF color) {
+        SetDCBrushColor(device_context, color);
+    }
+
+    
 
     operator HDC() const noexcept { return device_context; }
 
@@ -91,7 +113,7 @@ private:
 
 
     void message_caller(const message_funcs_t& to_call, WPARAM wparam, LPARAM lparam) {
-        std::visit(visiter{
+        std::visit(visitor{
            [&](std::function<void(WPARAM, LPARAM)> action) {action(lparam, wparam); },
            [&](std::function<void(WPARAM) > action) {action(wparam); },
            [&](std::function<void(LPARAM) > action) {action(lparam); },
@@ -101,7 +123,7 @@ private:
     }
 
     void commad_caller(const command_funcs_t& to_call, LPARAM lparam) {
-        std::visit(visiter{
+        std::visit(visitor{
             [&](std::function<void(LPARAM) > action) {action(lparam); },
             [&](std::function<void() > action) {action(); }
             }, to_call);
@@ -114,16 +136,6 @@ private:
 public:
 
 
-    void set_background_color(int r, int g, int b) {
-        PAINTSTRUCT ps{};
-        HDC hdc = BeginPaint(handle, &ps);
-        SetBkColor(hdc, RGB(r, g, b));
-
-        EndPaint(handle, &ps);
-
-
-
-    }
     HWND handle{};  //смерть абстракции
 
     prop<std::wstring> window_name{ win_name,
@@ -213,6 +225,19 @@ public:
 
     }
 
+
+
+    template <typename Func>
+    void on_key_down(Func&& action) {
+        message_actions[WM_KEYDOWN] = std::function(std::forward<Func>(action));
+    }
+
+    template <typename KeyFunc> requires std::is_convertible_v <KeyFunc, std::function<void(char)>>
+    void on_key_down(KeyFunc&& action) {
+        message_actions[WM_KEYDOWN] = std::function([&](WPARAM w) {
+            action(w);
+            });
+    }
 
 
 
