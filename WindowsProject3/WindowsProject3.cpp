@@ -9,28 +9,32 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     _In_ LPWSTR    lpCmdLine,
     _In_ int       nCmdShow)
 {
-  
+   
+    
     window wnd;
 
-    int x{}, y{};
+    int x{0}, y{10};
 
     COLORREF color{};
 
     wnd.on_paint([&] {
           dc context{ wnd };
-          context.set_pen_color(color);
-         // context.set_pixel(x, y, color);
-         // SetDCPenColor(hdc, RGB(0, 0, 255));
-          context.line(x, y, 100, 100);
+          x++;
+          y = (sin(x) * 100) + 10;
+          
+          
+          context.set_pixel(x, y);
+         
+
         });
 
 
-    wnd.on_mouse_move([&](int x_cord, int y_cord) {
+    /*wnd.on_mouse_move([&](int x_cord, int y_cord) {
         x = x_cord;
         y = y_cord;
         wnd.window_name = std::to_wstring(x) + L"    " + std::to_wstring(y);
         });
-
+        */
     wnd.on_key_down([&](char key) {
         switch (key) {
         case '1': color = RGB(255, 0, 0); break;

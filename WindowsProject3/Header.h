@@ -1,5 +1,5 @@
 #include "framework.h"
-//#define __cpp_lib_concepts 201907L
+
 #include"properties.h"
 
 #include <type_traits>
@@ -19,10 +19,6 @@ inline int get_x(LPARAM l) {
 inline int get_y(LPARAM l) {
     return  ((int)(short)HIWORD(l));
 }
-
-
-
-
 template<typename... Ts> struct visitor : Ts... { using Ts::operator()...; };
 template<typename... Ts> visitor(Ts...)->visitor<Ts...>;
 
@@ -36,6 +32,7 @@ concept integral_range = integral_pair<T> or std::is_integral_v<T>;
 template<typename T>
 using common_pair_type = std::common_type_t<typename T::first_type, typename T::second_type > ;
 
+ 
 
 class dc {
 private:
@@ -46,6 +43,8 @@ public:
     dc(HWND window) : window(window) {
    
         device_context = GetDC(window);
+        SelectObject(device_context, GetStockObject(DC_PEN));
+        SelectObject(device_context, GetStockObject(DC_BRUSH));
     }
     ~dc() {
         ReleaseDC(window, device_context);
@@ -53,6 +52,16 @@ public:
 
     //верхний левый
     //правый нижний
+
+
+    template<typename... Types>
+    auto bezier(Types... args) {
+        return PolyBezier(device_context, { args... }, sizeof...(args));
+    }
+   BOOL circle(int x, int y, int r) {
+        return Ellipse(device_context, x - r, y - r, x + r, y + r);
+
+    }
     bool rectangle(int x1, int y1, int x2, int y2) {
         return Rectangle(device_context, x1, y1, x2, y2);
     }
@@ -67,8 +76,6 @@ public:
     }
 
     COLORREF set_pen_color(COLORREF color) {
-        HPEN pen{ CreatePen(PS_SOLID, 1, color) };
-        SelectObject( device_context, pen);
         return SetDCPenColor(device_context, color);
     }
 
